@@ -19,6 +19,7 @@
 use std::{collections::HashMap, thread};
 
 use super::metrics::group::{from_individual_metrics, from_producers_and_consumers_statistics};
+use crate::info;
 use crate::utils::get_server_stats;
 use bench_report::{
     actor_kind::ActorKind,
@@ -45,6 +46,10 @@ impl BenchmarkReportBuilder {
         moving_average_window: u32,
         client_factory: &Arc<dyn ClientFactory>,
     ) -> BenchmarkReport {
+        let now = std::time::SystemTime::now();
+
+        log_event_at_time("Begin building report", now);
+
         let uuid = uuid::Uuid::new_v4();
 
         let timestamp =
@@ -63,9 +68,13 @@ impl BenchmarkReportBuilder {
             params.gitref_date = Some(timestamp.clone());
         }
 
+        log_event_at_time("Got server stats", now);
+
         let mut group_metrics = Vec::new();
 
         individual_metrics.sort_by_key(|m| (m.summary.actor_kind, m.summary.actor_id));
+
+        log_event_at_time("Sorted metrics", now);
 
         let producer_metrics: Vec<BenchmarkIndividualMetrics> = individual_metrics
             .iter()
@@ -82,6 +91,8 @@ impl BenchmarkReportBuilder {
             .filter(|m| m.summary.actor_kind == ActorKind::ProducingConsumer)
             .cloned()
             .collect();
+
+        log_event_at_time("Filtered and cloned metrics", now);
 
         let mut join_handles = Vec::new();
 
@@ -129,7 +140,9 @@ impl BenchmarkReportBuilder {
             }
         }
 
-        BenchmarkReport {
+        log_event_at_time("Finished computing group metrics", now);
+
+        let report = BenchmarkReport {
             uuid,
             server_stats: stats_to_benchmark_server_stats(server_stats),
             timestamp,
@@ -137,7 +150,11 @@ impl BenchmarkReportBuilder {
             params,
             group_metrics,
             individual_metrics,
-        }
+        };
+
+        log_event_at_time("Finished assembling report", now);
+
+        report
     }
 }
 
@@ -195,4 +212,11 @@ fn cache_metrics_to_benchmark_cache_metrics(
             )
         })
         .collect()
+}
+
+fn log_event_at_time(event: &str, time: std::time::SystemTime) {
+    match time.elapsed() {
+        Ok(duration) => info!("{} @ {} microsec", event, duration.as_micros()),
+        Err(_) => info!("{} @ unknown time", event),
+    }
 }
