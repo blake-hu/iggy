@@ -29,8 +29,8 @@ use bench_report::{
     group_metrics_kind::GroupMetricsKind,
     group_metrics_summary::BenchmarkGroupMetricsSummary,
     individual_metrics::BenchmarkIndividualMetrics,
-    utils::{max, min, std_dev},
     time_series::{TimeSeries, TimeSeriesKind},
+    utils::{max, min, std_dev},
 };
 use std::thread;
 
