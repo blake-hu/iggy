@@ -203,11 +203,11 @@ fn calculate_group_time_series(
             })
             .collect();
 
-        return (
+        (
             extract_time_series_of_kind(&mut time_series, TimeSeriesKind::ThroughputMB),
             extract_time_series_of_kind(&mut time_series, TimeSeriesKind::ThroughputMsg),
             extract_time_series_of_kind(&mut time_series, TimeSeriesKind::Latency),
-        );
+        )
     })
 }
 

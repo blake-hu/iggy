@@ -19,7 +19,6 @@
 use std::{collections::HashMap, thread};
 
 use super::metrics::group::{from_individual_metrics, from_producers_and_consumers_statistics};
-use crate::info;
 use crate::utils::get_server_stats;
 use bench_report::{
     actor_kind::ActorKind,
@@ -46,8 +45,6 @@ impl BenchmarkReportBuilder {
         moving_average_window: u32,
         client_factory: &Arc<dyn ClientFactory>,
     ) -> BenchmarkReport {
-        let now = std::time::SystemTime::now();
-
         let uuid = uuid::Uuid::new_v4();
 
         let timestamp =
@@ -104,7 +101,7 @@ impl BenchmarkReportBuilder {
                     }
                     None
                 }));
-            };
+            }
         }
 
         if matches!(
@@ -123,7 +120,7 @@ impl BenchmarkReportBuilder {
                     return Some(metric);
                 }
                 None
-            }))
+            }));
         }
 
         for handle in join_handles {
