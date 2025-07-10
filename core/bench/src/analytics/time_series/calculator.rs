@@ -23,8 +23,10 @@ use super::calculators::{
     ThroughputTimeSeriesCalculator, TimeSeriesCalculation,
 };
 use crate::analytics::record::BenchmarkRecord;
+use crate::info;
 use bench_report::time_series::{TimePoint, TimeSeries, TimeSeriesKind};
 use iggy::prelude::IggyDuration;
+use rayon::prelude::*;
 use tracing::warn;
 
 /// Calculate time series data from benchmark records
@@ -47,6 +49,8 @@ impl TimeSeriesCalculator {
     }
 
     pub fn aggregate_sum(series: &[TimeSeries]) -> TimeSeries {
+        let mut now = std::time::SystemTime::now();
+
         if series.is_empty() {
             warn!("Attempting to aggregate empty series");
             return TimeSeries {
@@ -54,6 +58,8 @@ impl TimeSeriesCalculator {
                 kind: TimeSeriesKind::default(),
             };
         }
+
+        log_and_update_duration("Begin TimeSeriesCalculator", &mut now);
 
         let kind = series[0].kind;
         let mut all_times = series
@@ -63,26 +69,34 @@ impl TimeSeriesCalculator {
         all_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
         all_times.dedup();
 
+        log_and_update_duration(">> Get all times for sum", &mut now);
+
         let points = all_times
-            .into_iter()
+            .into_par_iter()
             .map(|time| {
+                // for each time point
                 let sum: f64 = series
                     .iter()
                     .filter_map(|s| {
+                        // for each time series
                         s.points
                             .iter()
                             .find(|p| (p.time_s - time).abs() < f64::EPSILON)
-                            .map(|p| p.value)
+                            .map(|p| p.value) // find the value at the current time point
                     })
-                    .sum();
+                    .sum(); // and sum up all values at this time point
                 TimePoint::new(time, sum)
             })
             .collect();
+
+        log_and_update_duration(">> Compute sum", &mut now);
 
         TimeSeries { points, kind }
     }
 
     pub fn aggregate_avg(series: &[TimeSeries]) -> TimeSeries {
+        let mut now = std::time::SystemTime::now();
+
         if series.is_empty() {
             warn!("Attempting to aggregate empty series");
             return TimeSeries {
@@ -100,8 +114,10 @@ impl TimeSeriesCalculator {
         all_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
         all_times.dedup();
 
+        log_and_update_duration(">> Get all times for avg", &mut now);
+
         let points = all_times
-            .into_iter()
+            .into_par_iter()
             .map(|time| {
                 let matching_values: Vec<f64> = series
                     .iter()
@@ -120,6 +136,16 @@ impl TimeSeriesCalculator {
             })
             .collect();
 
+        log_and_update_duration(">> Compute avg", &mut now);
+
         TimeSeries { points, kind }
     }
+}
+
+fn log_and_update_duration(task: &str, now: &mut std::time::SystemTime) {
+    match now.elapsed() {
+        Ok(duration) => info!("{} took {} microsec", task, duration.as_micros()),
+        Err(_) => info!("{} took unknown time", task),
+    }
+    *now = std::time::SystemTime::now();
 }

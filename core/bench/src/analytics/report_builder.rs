@@ -102,7 +102,9 @@ impl BenchmarkReportBuilder {
             &producing_consumers_metrics,
         ] {
             if !individual_metric.is_empty() {
-                let individual_metric_copy = individual_metric.clone();
+                let individual_metric_copy: Vec<BenchmarkIndividualMetrics> =
+                    individual_metric.clone();
+                info!("metrics len: {}", individual_metric_copy.len());
 
                 join_handles.push(thread::spawn(move || {
                     if let Some(metric) =

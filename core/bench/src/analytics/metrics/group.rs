@@ -23,6 +23,7 @@ use crate::analytics::time_series::{
     calculator::TimeSeriesCalculator,
     processors::{TimeSeriesProcessor, moving_average::MovingAverageProcessor},
 };
+use crate::info;
 use bench_report::{
     actor_kind::ActorKind,
     group_metrics::BenchmarkGroupMetrics,
@@ -52,13 +53,24 @@ pub fn from_individual_metrics(
     if stats.is_empty() {
         return None;
     }
+    let now = std::time::SystemTime::now();
 
+    let kind = if stats.len() == 200 {
+        determine_group_kind(stats)
+    } else {
+        GroupMetricsKind::ProducersAndConsumers
+    };
+    info!("{kind}: len {}", stats.len());
+    log_event_at_time_with_kind("Completed determine_group_kind", now, kind);
     let throughput_metrics = calculate_throughput_metrics(stats);
+    log_event_at_time_with_kind("Completed calculate_throughput_metrics", now, kind);
     let latency_metrics = calculate_latency_metrics(stats);
-    let kind = determine_group_kind(stats);
+    log_event_at_time_with_kind("Completed calculate_latency_metrics", now, kind);
     let time_series = calculate_group_time_series(stats, moving_average_window);
+    log_event_at_time_with_kind("Completed calculate_group_time_series", now, kind);
     let (min_latency_ms_value, max_latency_ms_value) =
         calculate_min_max_latencies(stats, &time_series.2);
+    log_event_at_time_with_kind("Completed calculate_min_max_latencies", now, kind);
 
     let summary = BenchmarkGroupMetricsSummary {
         kind,
@@ -79,6 +91,7 @@ pub fn from_individual_metrics(
         std_dev_latency_ms: std_dev(&time_series.2).unwrap_or(0.0),
     };
 
+    log_event_at_time_with_kind("Completed from_individual_metrics", now, kind);
     Some(BenchmarkGroupMetrics {
         summary,
         avg_throughput_mb_ts: time_series.0,
@@ -161,29 +174,40 @@ fn calculate_group_time_series(
     stats: &[BenchmarkIndividualMetrics],
     moving_average_window: u32,
 ) -> (TimeSeries, TimeSeries, TimeSeries) {
+    let mut now = std::time::SystemTime::now();
+    log_and_update_duration("Begin time series ops", &mut now);
+
     let mut avg_throughput_mb_ts = TimeSeriesCalculator::aggregate_sum(
         &stats
             .iter()
             .map(|r| r.throughput_mb_ts.clone())
             .collect::<Vec<_>>(),
     );
+    log_and_update_duration("Extract MB time series", &mut now);
+
     let mut avg_throughput_msg_ts = TimeSeriesCalculator::aggregate_sum(
         &stats
             .iter()
             .map(|r| r.throughput_msg_ts.clone())
             .collect::<Vec<_>>(),
     );
+    log_and_update_duration("Extract message time series", &mut now);
+
     let mut avg_latency_ts = TimeSeriesCalculator::aggregate_avg(
         &stats
             .iter()
             .map(|r| r.latency_ts.clone())
             .collect::<Vec<_>>(),
     );
+    log_and_update_duration("Extract latency time series", &mut now);
 
     let sma = MovingAverageProcessor::new(moving_average_window as usize);
     avg_throughput_mb_ts = sma.process(&avg_throughput_mb_ts);
+    log_and_update_duration("Compute MB moving average", &mut now);
     avg_throughput_msg_ts = sma.process(&avg_throughput_msg_ts);
+    log_and_update_duration("Compute message moving average", &mut now);
     avg_latency_ts = sma.process(&avg_latency_ts);
+    log_and_update_duration("Compute latency moving average", &mut now);
 
     (avg_throughput_mb_ts, avg_throughput_msg_ts, avg_latency_ts)
 }
@@ -214,4 +238,20 @@ fn calculate_min_max_latencies(
     let max_latency_ms_value = max_latency_ms.unwrap_or_else(|| max(avg_latency_ts).unwrap_or(0.0));
 
     (min_latency_ms_value, max_latency_ms_value)
+}
+
+
+fn log_event_at_time_with_kind(event: &str, time: std::time::SystemTime, kind: GroupMetricsKind) {
+    match time.elapsed() {
+        Ok(duration) => info!("{}: {} @ {} microsec", kind, event, duration.as_micros()),
+        Err(_) => info!("{}: {} @ unknown time", kind, event),
+    }
+}
+
+fn log_and_update_duration(task: &str, now: &mut std::time::SystemTime) {
+    match now.elapsed() {
+        Ok(duration) => info!("{} took {} microsec", task, duration.as_micros()),
+        Err(_) => info!("{} took unknown time", task),
+    }
+    *now = std::time::SystemTime::now();
 }
