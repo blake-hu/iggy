@@ -17,38 +17,24 @@
 
 package iggcon
 
-type ConsumerKind int
-
-const (
-	ConsumerKindSingle ConsumerKind = 1
-	ConsumerKindGroup  ConsumerKind = 2
+import (
+	"math"
 )
 
-type Consumer struct {
-	Kind ConsumerKind
-	Id   Identifier
-}
+const (
+	// IggyExpiryServerDefault use the default expiry time from the server
+	IggyExpiryServerDefault Duration = 0
+	// IggyExpiryNeverExpire never expire
+	IggyExpiryNeverExpire Duration = math.MaxUint64
+)
 
-func DefaultConsumer() Consumer {
-	defaultID, _ := NewIdentifier(uint32(1))
-	return Consumer{
-		Kind: ConsumerKindSingle,
-		Id:   defaultID,
-	}
-}
+// Duration represents the expiration duration in microsecond (µs).
+type Duration uint64
 
-// NewSingleConsumer create a new Consumer whose kind is ConsumerKindSingle from the Identifier
-func NewSingleConsumer(id Identifier) Consumer {
-	return Consumer{
-		Kind: ConsumerKindSingle,
-		Id:   id,
-	}
-}
-
-// NewGroupConsumer create a new Consumer whose kind is ConsumerKindGroup from the Identifier
-func NewGroupConsumer(id Identifier) Consumer {
-	return Consumer{
-		Kind: ConsumerKindGroup,
-		Id:   id,
-	}
-}
+const (
+	Microsecond Duration = 1
+	Millisecond          = 1000 * Microsecond
+	Second               = 1000 * Millisecond
+	Minute               = 60 * Second
+	Hour                 = 60 * Minute
+)
